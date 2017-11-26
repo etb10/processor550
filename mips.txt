@@ -1,0 +1,51 @@
+# you can do comments like this
+
+# intended order:
+
+# addi to insert values into program
+# 0
+addi $r1, $r0, 1
+# 1
+addi $r2, $r0, 2
+# 2
+addi $r3, $r0, 3
+# 3
+addi $r4, $r0, 4
+# 4
+addi $r5, $r0, 5
+# 5
+addi $r6, $r0, 6
+
+# jump logic 
+# 6 (no branch first time, branch second time --> 11)
+blt $r2, $r1, 4
+# 7
+addi $r2, $r0, -5
+# 8 --> 19
+jal 19
+# 9 
+j 10
+# 10 --> 6
+j 6
+# 11
+addi $r1, $r0, 4
+# 12: loop
+lw $r2, 0($r3)
+# 13
+addi $r2, $r2, 10
+# 14
+addi $r3, $r3, 1
+# 15
+sw $r2, 0($r3)
+# 16
+addi $r1, $r1, -1
+# 17
+bne $r1, $r0, -5
+# 18
+addi $r31, $r0, 21
+# 19 --> 9
+jr $r31
+# 20
+mul $r1, $r1, $r1
+# 21
+nop
