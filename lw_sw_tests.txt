@@ -1,0 +1,39 @@
+# you can do comments like this
+
+
+# addi to insert values into program
+addi $r1, $r0, 1
+addi $r2, $r0, 2
+addi $r3, $r0, 3
+addi $r4, $r0, 4
+addi $r5, $r0, 5
+addi $r6, $r0, 6
+
+addi $r11, $r0, 11
+addi $r12, $r0, 12
+addi $r13, $r0, 13
+addi $r14, $r0, 14
+addi $r15, $r0, 15
+addi $r16, $r0, 16
+
+# sw into memory
+sw $r11, 0($r1)
+sw $r12, 4($r2)
+sw $r13, 6($r3)
+sw $r14, -8($r4)
+sw $r15, -10($r5)
+sw $r16, 12($r6)
+
+# lw from memory
+lw $r21, 0($r1)
+lw $r22, 4($r2)
+lw $r23, 6($r3)
+lw $r24, -8($r4)
+lw $r25, -10($r5)
+lw $r26, 12($r6)
+
+# store, then load, then use value to store (and load that again to check)
+sw $r6, 0($r1)
+lw $r6, 0($r1)
+sw $r6, 0($r1)
+lw $r6, 0($r1)

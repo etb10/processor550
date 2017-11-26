@@ -1,0 +1,40 @@
+# you can do comments like this
+
+# addi to insert values into program
+# 0
+addi $r1, $r0, 7
+# 1
+addi $r2, $r0, 2
+# 2
+addi $r3, $r0, 3
+# 3
+addi $r4, $r0, 4
+# 4
+addi $r5, $r0, 5
+# 5
+addi $r6, $r0, 6
+
+# divide by 0 to see if exception occurs
+# 6
+div $r1, $r6, $r0
+# add 5 to the value in $r30, which should be 5
+# 7
+bex 10
+# 8
+sw $r6, -4($r5)
+# 9
+lw $r7, -4($r5)
+# 10
+addi $r30, $r0, 0
+# 11 --> 7
+bne $r6, $r7, -5
+# 12
+div $r16, $r7, $r6
+# 14
+addi $r12, $r16, 12
+addi $r12, $r16, 12
+addi $r12, $r16, 12
+addi $r12, $r16, 12
+addi $r12, $r16, 12
+addi $r12, $r16, 12
+addi $r12, $r16, 12

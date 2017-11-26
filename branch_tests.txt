@@ -1,0 +1,33 @@
+# you can do comments like this
+
+# addi to insert values into program
+# 0
+addi $r1, $r0, 1
+# 1
+addi $r2, $r0, 2
+# 2
+addi $r3, $r0, 3
+# 3
+addi $r4, $r0, 4
+# 4
+addi $r5, $r0, 5
+# 5
+addi $r6, $r0, 6
+
+# branch to PC 
+# 6 --> 12 becuase 1 != 0 (PC = 6 + 1 + 5 = 12)
+bne $r1, $r0, 5
+# 7 
+addi $r1, $r0, 100
+# 8
+addi $r2, $r0, 10
+# 9 
+addi $r3, $r0, 100
+# 10
+addi $r4, $r0, 100
+# 11
+addi $r5, $r0, -100
+# 12 --> 7 first time becuase 100 < 10 therefore PC = 12 + 1 - 6 = 7
+blt $r1, $r2, -6
+# 13
+mul $r3, $r1, $r2
