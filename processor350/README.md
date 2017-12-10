@@ -240,5 +240,72 @@ Forward exception signal back (if m_exc and x_rs1 is $r30, then need to write ba
 
 
 
+# 550 Processor
+
+## New Instructions
+4 new instructions
+### lab_in $rd, $rs, N
+- Function
+	- Initialize the LAB counter to prepare for a loop of length $rs + N, incremented each step by $rd.
+	- Clear the incrementer value (set it to 0)
+	- Set "LOOP" register to 1
+	- Clear the LAB
+- OP: 11100
+- I-type 
+	- $rd[26:22]: size of incrementer (if $r0, then default set to 1)
+	- $rs[21:17]: base size of loop 
+	- N[16:0]: amount to add to loop
+
+### blab N
+- Function
+	- Check if the incrementer value is less than or equal to the max increment value.
+		- We can set this as a register, and simply check (branches can be resolved in F stage, unless dependencies exist).
+		- Create "LOOP" register
+	- If LOOP is high, then next PC = PC + 1 + N
+	- If LOOP is low, then...
+		- Next PC = PC + 1
+		- Allow all values in the LAB to be written back to the real register file (stall processor and pad with nops until all values are out)
+		- WB_values = AND(valid_bits of LAB)
+	- After checking the value, then set the incrementer value += (incrementer_step_size)
+- OP: 11101
+- J-type
+	- N[26:0]: (offset of current PC)
+		- need to create a new signed extender (the original N architecture does unsigned extension)
+
+### lw_lab $rd, $rs, N
+- Function
+	- Load values into memory at the address in LAB at that register
+- OP: 11110
+- I-type
+	- $rd[26:22]: actual register where data will be loaded
+	- $rs[21:17]: register index (the one that will specify which index of the LAB we're using to access this value)
+	- N[16:0]: immediate value indicating base location of the memory accessed
+		- the memory address accessed will be = N + incrementer value 
+
+### sw_lab $rd, $rs, N
+- Function
+	- Store values into memory at the address in LAB at that register
+- OP: 11111
+- I-type
+	- $rd[26:22]: actual register containing data to be written to memory
+	- $rs[21:17]: register index (the one that will specify which index of the LAB we're using to access this value)
+	- N[16:0]: immediate value indicating base location of the memory accessed
+		- the memory address accessed will be = N + incrementer value 
+
+## LAB Interface
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
