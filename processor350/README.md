@@ -14,7 +14,7 @@
 	- $rt[16:12]: Index of CAM to access
 
 ### b_lab $rd, N
-Function
+- Function
 	- If $rd(LOOP) is high, then... 
 		- Next PC = PC + 1 + N
 		- Increment $rd(LAB) offset value
@@ -22,8 +22,8 @@ Function
 	- If $rd(LOOP) is low, then...
 		- Next PC = PC + 1
 		- RESET all values at $rd(LOOP)
-OP: 11101
-JII-type
+- OP: 11101
+- JII-type
 	- $rd[26:22]: Index of CAM to access
 	- N[21:0]: (offset of current PC)
 		- need to create a new signed extender (the original N architecture does unsigned extension)
@@ -50,33 +50,33 @@ JII-type
 ## LAB Interface
 The Load Address Buffer will provide the following interface.
 
-### input[4:0] register_index
-Register index of the CAM to be accessed.
+- input[4:0] register_index
+	- Register index of the CAM to be accessed.
 
-### input[31:0] threshold_value
-Threshold value to compare loop against (set by lab_init).
+- input[31:0] threshold_value
+	- Threshold value to compare loop against (set by lab_init).
 
-### input[31:0] incrementer_value
-Value to increment the offset by (set by lab_init).
+- input[31:0] incrementer_value
+	- Value to increment the offset by (set by lab_init).
 
-### input initialize_WE 
-Write enable for setting the incrementer_value. When high, the incrementer_value will need to be set to whatever input is given to it (initialize_WE = inst.lib_init).
+- input initialize_WE 
+	- Write enable for setting the incrementer_value. When high, the incrementer_value will need to be set to whatever input is given to it (initialize_WE = inst.lib_init).
 
-### input increase_address
-Goes high for one signal, when b_lab is called and taken. Increases the stored address by incrementer_value
+- input increase_address
+	- Goes high for one signal, when b_lab is called and taken. Increases the stored address by incrementer_value
 
-### input clock
-Clock to control the signal. Positive Edge clocked.
+- input clock
+	- Clock to control the signal. Positive Edge clocked.
 
-### input reset
-Reset all values (do when b_lab is NOT taken)
+- input reset
+	- Reset all values (do when b_lab is NOT taken)
 
-### output[31:0] address_out
-Address used to access memory. This address will be added to base memory from the lw_lab and sw_lab instructions.
+- output[31:0] address_out
+	- Address used to access memory. This address will be added to base memory from the lw_lab and sw_lab instructions.
 
-### output LOOP
-This output is HIGH if we need to take the branch.
-This output is LOW if we should NOT take the branch.
+- output LOOP
+	- This output is HIGH if we need to take the branch.
+	- This output is LOW if we should NOT take the branch.
 
 
 
