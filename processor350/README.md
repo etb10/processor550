@@ -82,7 +82,7 @@ The Load Address Buffer will provide the following interface.
 
 ## Implementing LAB
 
-### lab_in $rd, $rs, N
+### init_lab $rd, $rs, N
 Decode
 - read the values from register file
 	- $rd[26:22]: size of incrementer
@@ -154,11 +154,12 @@ LAB Interface
 - `reset` = TRUE when b_lab reaches Decode stage
 
 
-
-### Deterministic LAB Interface
+### Final LAB Interface Values
 - `register_index`
 	- if (b_lab): $rd[26:22]
 	- if !(b_lab): $rt[16:12] 
+- `threshold_value` = $rs value
+- `incrementer_value` = $rd value
 - `initialize_WE` = init_lab = (xinst[31:27] == 11100)
 - `increase_address` = b_lab = (xinst[31:27] == 11101)
 - `reset` = dedode.b_lab and (!LOOP) = (d_inst[31:27] == 11101) && ($rt.(LOOP) is LOW) = do_not_b_lab
