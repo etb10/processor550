@@ -35,40 +35,17 @@
  * 
  */
 module processor(clock, reset, dmem_data_in, dmem_address
-	  
-	  //, d_inst, d_PC, d_inst_in, d_rs1_data, d_rs2_data, w_rd_data, w_inst, w_PC_plus4,
-	 // w_inst_writesback, m_inst_writesback, d_br_or_sw, w_jal,
-	  //w_rd, d_rs, d_rs2, w_rd_after_exception, d_rs2_hold
-	  
-	  , x_PC, x_alu_out, x_RS1, x_RS2, //, data_op_B_final_after_setx, data_op_A, m_neq
-	  data_op_A, data_op_B_final_after_setx,
-    ALU_op_code,
-     x_n_eq, x_LT, x_ovf
-	  //next_PC, f_PC, f_PC_plus4, f_inst, j_PC, j_PC_hold, f_T_extended, d_PC,
-	  //d_jr, PC_latch_enable, f_jump, f_j, f_jal, x_jr, take_branch, m_op_bne, m_op_blt, nop_notfinst, fd_reset, fd_stall, mult_div_stall, data_haz_stall, jr_stall, x_mult, x_divd, x_ALU, d_load, f_not_store, rs_equal_rd, rt_equal_rd
-
-	  // d_inst, d_PC, d_inst_in, d_rs1_data, d_rs2_data, w_rd_data, w_inst, w_PC_plus4,
-	  // w_inst_writesback, m_inst_writesback, d_br_or_sw, w_jal,
-	  // w_rd, d_rs, d_rs2
-	  
-
-	  // x_RS1, x_RS2, x_inst, x_PC, /*x_imm_xt,*/ data_op_A, data_op_A_hold, data_op_B, data_op_B_hold, data_op_B_final_after_setx, /* x_alu_out,*/ x_data_mul_div,  x_data_final, x_multdiv_out, /*x_inst_or_nop, */
-	  // m_op_bex, m_neq, m_s2_exc_writeback, x_exc, m_exc, w_exc, x_s1_equals_31, w_s1_jal_writeback, m_s1_jal_writeback, x_s1_equals_30, w_s1_exc_writeback, m_s1_exc_writeback, x_s2_equals_31, w_jal_writeback, m_jal_writeback, m_jal, w_s2_exc_writeback, x_s2_equals_30, x_s1_m_equal, x_s1_w_equal, x_br_or_sw, m_br_or_sw, w_br_or_sw, x_s2_m_equal, x_s2_w_equal, x_i_type, x_LT, x_ovf, x_n_eq, x_data_exception, x_mult_or_div, ctrl_MULT, ctrl_DIV, x_jal,
-	  // x_rs2_holder, m_inst_rs2_holder, w_inst_rs2_holder, x_exc_ID, m_exc_ID, w_exc_ID
-	 
-	  // m_RD, m_inst, m_PC, m_PC_plus4, m_data, m_data_in, m_data_final, m_imm_xt, m_branch_dest, mem_out, w_inst, w_PC, w_data,
-	  // m_ovf, m_neq, m_lt, write_rd_back_mw, m_inst_sw, m_inst_lw
-);
+	  );
 	 
 
 	 
     input clock, reset;
 
-	 output [31:0] data_op_A, data_op_B_final_after_setx;
-    output [4:0]  ALU_op_code;
-    output x_n_eq, x_LT, x_ovf;
+	//output [31:0] data_op_A, data_op_B_final_after_setx;
+    //output [4:0]  ALU_op_code;
+    //output x_n_eq, x_LT, x_ovf;
 	 
-    output [31:0] dmem_data_in, x_PC, x_alu_out, x_RS1, x_RS2; //, data_op_B_final_after_setx, data_op_A;
+    output [31:0] dmem_data_in;//, x_PC, x_alu_out, x_RS1, x_RS2; //, data_op_B_final_after_setx, data_op_A;
     output [11:0] dmem_address;
 
     // Figure out how to generate a Quartus syncram component and commit the

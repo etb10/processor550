@@ -2,6 +2,86 @@
 
 ## New Instructions
 4 new instructions
+### init_lab $rd, $rs, $rt
+- Function
+	- Initialize the LAB counter to prepare for a loop of length $rs, incremented each step by $rd.
+	- Reset the offset value (set it to 0)
+	- Set "LOOP" register to 1
+- OP: 11100
+- R-type 
+	- $rd[26:22]: size of incrementer (if $r0, then default set to 1)
+	- $rs[21:17]: size of loop 
+	- $rt[16:12]: Index of CAM to access
+
+### b_lab $rd, N
+Function
+	- If $rd(LOOP) is high, then... 
+		- Next PC = PC + 1 + N
+		- Increment $rd(LAB) offset value
+		- WB new $rd(LAB) value to $rd
+	- If $rd(LOOP) is low, then...
+		- Next PC = PC + 1
+		- RESET all values at $rd(LOOP)
+OP: 11101
+JII-type
+	- $rd[26:22]: Index of CAM to access
+	- N[21:0]: (offset of current PC)
+		- need to create a new signed extender (the original N architecture does unsigned extension)
+
+
+### lw_lab $rd, $rs, $rt
+- Function
+	- Load value at M[$rs + $rt(LAB)] into $rd.
+- OP: 11110
+- R-type
+	- $rd[26:22]: Actual register where data will be loaded.
+	- $rs[21:17]: Base address of loop memory access.
+	- $rt[16:12]: Index of CAM.
+
+### sw_lab $rd, $rs, N
+- Function
+	- Store value in $rd into M[$rs + $rt(LAB)].
+- OP: 11110
+- R-type
+	- $rd[26:22]: Actual register where data is located.
+	- $rs[21:17]: Base address of loop memory access.
+	- $rt[16:12]: Index of CAM.
+
+## LAB Interface
+The Load Address Buffer will provide the following interface.
+
+### input[4:0] register_index
+Register index of the CAM to be accessed.
+
+### input[31:0] threshold_value
+Threshold value to compare loop against (set by lab_init).
+
+### input[31:0] incrementer_value
+Value to increment the offset by (set by lab_init).
+
+### input initialize_WE 
+Write enable for setting the incrementer_value. When high, the incrementer_value will need to be set to whatever input is given to it (initialize_WE = inst.lib_init).
+
+### input increase_address
+Goes high for one signal, when b_lab is called and taken. Increases the stored address by incrementer_value
+
+### input clock
+Clock to control the signal. Positive Edge clocked.
+
+### input reset
+Reset all values (do when b_lab is NOT taken)
+
+### output[31:0] address_out
+Address used to access memory. This address will be added to base memory from the lw_lab and sw_lab instructions.
+
+### output LOOP
+This output is HIGH if we need to take the branch.
+This output is LOW if we should NOT take the branch.
+
+
+
+## Implementing Instructions
+
 ### lab_in $rd, $rs, N
 - Function
 	- Initialize the LAB counter to prepare for a loop of length $rs + N, incremented each step by $rd.
@@ -14,69 +94,15 @@
 	- $rs[21:17]: base size of loop 
 	- N[16:0]: amount to add to loop
 
-### blab N
-- Function
-	- Check if the incrementer value is less than or equal to the max increment value.
-		- We can set this as a register, and simply check (branches can be resolved in F stage, unless dependencies exist).
-		- Create "LOOP" register
-	- If LOOP is high, then next PC = PC + 1 + N
-	- If LOOP is low, then...
-		- Next PC = PC + 1
-		- Allow all values in the LAB to be written back to the real register file (stall processor and pad with nops until all values are out)
-		- WB_values = AND(valid_bits of LAB)
-	- After checking the value, then set the incrementer value += (incrementer_step_size)
-- OP: 11101
-- J-type
-	- N[26:0]: (offset of current PC)
-		- need to create a new signed extender (the original N architecture does unsigned extension)
-
-### lw_lab $rd, $rs, N
-- Function
-	- Load values into memory at the address in LAB at that register
-- OP: 11110
-- I-type
-	- $rd[26:22]: actual register where data will be loaded
-	- $rs[21:17]: register index (the one that will specify which index of the LAB we're using to access this value)
-	- N[16:0]: immediate value indicating base location of the memory accessed
-		- the memory address accessed will be = N + incrementer value 
-
-### sw_lab $rd, $rs, N
-- Function
-	- Store values into memory at the address in LAB at that register
-- OP: 11111
-- I-type
-	- $rd[26:22]: actual register containing data to be written to memory
-	- $rs[21:17]: register index (the one that will specify which index of the LAB we're using to access this value)
-	- N[16:0]: immediate value indicating base location of the memory accessed
-		- the memory address accessed will be = N + incrementer value 
-
-## LAB Interface
-The Load Address Buffer will provide the following interface.
-
-### input[4:0] register_in
-Register incrementer value that will be used to access this value
-
-### input[31:0] address_in
-Computed base address that will need to be stored in the register
-
-### input[31:0] incrementer_value
-Initialized incrementer_value (set by lab_init)
-
-### input incrementer_WE
-Write enable for setting the incrementer_value. When high, the incrementer_value will need to be set to whatever input is given to it.
-
-### input clock
-Clock to control the signal
-
-### input reset
-Reset. Reset the value of this when a new lab_init instruction comes.
-
-### output[31:0] address_out
-Address used to access memory. This address will be added to N from the lw_lab and sw_lab instructions.
-
-### output LOOP
-This output is HIGH if we need to take the branch.
-This output is LOW if we should NOT take the branch.
+Decode
+- read the values from register file
+Execute
+- set max incrementer value to Data($rs) + N 
+	- similar to load and store -- reuse this infrastructure
+X/M latch
+- this positive edge is when we'll access the LAB. When x_inst is lab_in...
+	- We'll set `initialize_WE` high, which allows us to set this value to Data($rs) + N.
+	- register_in = $rd, which will be used to track the location where we should writeback the final base address location	
 
 
 
