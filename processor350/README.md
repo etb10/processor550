@@ -83,6 +83,11 @@ The Load Address Buffer will provide the following interface.
 ## Implementing LAB
 
 ### init_lab $rd, $rs, N
+OP: 11100
+R-type 
+- $rd[26:22]: size of incrementer
+- $rs[21:17]: size of loop 
+- $rt[16:12]: Index of CAM to access
 Decode
 - read the values from register file
 	- $rd[26:22]: size of incrementer

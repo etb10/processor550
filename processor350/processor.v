@@ -200,7 +200,7 @@ module processor(clock, reset, dmem_data_in, dmem_address
     // wires that will control regfile
     wire[31:0] d_rs1_data, d_rs2_data, w_rd_data, w_rd_data_after_exception;
 
-    wire w_inst_writesback, m_inst_writesback, d_op_bex, d_op_setx;
+    wire w_inst_writesback, m_inst_writesback, d_op_bex, d_op_setx, d_op_init_lab;
     wire[4:0] w_rd, d_rs, d_rs2, w_rd_after_exception, d_rs2_hold;
 
     // w_inst_writesback = w is an instruction that writes back
@@ -220,21 +220,24 @@ module processor(clock, reset, dmem_data_in, dmem_address
     assign w_rd  = (!w_inst[31] & !w_inst[30] & !w_inst[29] &  w_inst[28] &  w_inst[27]) ? 5'd31 : w_inst[26:22];
     assign w_rd_after_exception = w_exc ? 5'd30 : w_rd;
 	 
+    // 552 d_op_init_lab
+    assign d_op_init_lab = /*init_lab 11100*/   ( d_inst[31] &  d_inst[30] &  d_inst[29] & !d_inst[28] & !d_inst[27]);
+	
 
-	 
-	 assign d_op_bex  = /*bex       10110*/   ( d_inst[31] & !d_inst[30] &  d_inst[29] &  d_inst[28] & !d_inst[27]);
-	 assign d_op_setx = /*setx      10101*/   ( d_inst[31] & !d_inst[30] &  d_inst[29] & !d_inst[28] &  d_inst[27]);
-	 // d_rs is always rs of d_inst, unless we call bex - then it is $r30
+	assign d_op_bex  = /*bex       10110*/   ( d_inst[31] & !d_inst[30] &  d_inst[29] &  d_inst[28] & !d_inst[27]);
+	assign d_op_setx = /*setx      10101*/   ( d_inst[31] & !d_inst[30] &  d_inst[29] & !d_inst[28] &  d_inst[27]);
+    // d_rs is always rs of d_inst, unless we call bex - then it is $r30
     assign d_rs  = d_op_bex ? 5'd30 : d_inst[21:17];
 
     // d_rs2 is MUX between rt (0) and rd (1)
     wire d_br_or_sw;
     assign d_br_or_sw = /*branch    00-10*/   (!d_inst[31] & !d_inst[30]               &  d_inst[28] & !d_inst[27]) |
-								/*jr        00100*/   (!d_inst[31] & !d_inst[30] &  d_inst[29] & !d_inst[28] & !d_inst[27]) |
-                        /*sw        00111*/   (!d_inst[31] & !d_inst[30] &  d_inst[29] &  d_inst[28] &  d_inst[27]);                               
+						/*jr        00100*/   (!d_inst[31] & !d_inst[30] &  d_inst[29] & !d_inst[28] & !d_inst[27]) |
+                        /*sw        00111*/   (!d_inst[31] & !d_inst[30] &  d_inst[29] &  d_inst[28] &  d_inst[27]) | 
+                        /*552       b_lab*/   (d_op_init_lab);                               
     assign d_rs2_hold = d_br_or_sw ? d_inst[26:22] : d_inst[16:12];
-	 // d_rs2 is $r0 if we call bex
-	 assign d_rs2 = d_op_bex ? 5'd0 : d_rs2_hold;
+	// d_rs2 is $r0 if we call bex
+	assign d_rs2 = d_op_bex ? 5'd0 : d_rs2_hold;
 	 
 
     // w_rd_data = w_data OR w_PC + 4 if w_inst.op == jal
