@@ -41,7 +41,7 @@
 ### sw_lab $rd, $rs, N
 - Function
 	- Store value in $rd into M[$rs + $rt(LAB)].
-- OP: 11110
+- OP: 11111
 - R-type
 	- $rd[26:22]: Actual register where data is located.
 	- $rs[21:17]: Base address of loop memory access.
@@ -103,6 +103,11 @@ LAB Interface
 - `reset` = LOW
 
 ### lw_lab $rd, $rs, $rt
+OP: 11110
+R-type
+- $rd[26:22]: Actual register where data will be loaded.
+- $rs[21:17]: Base address of loop memory access.
+- $rt[16:12]: Index of CAM.
 Decode
 - read the values from register file
 	- $rs[21:17]: Base address of loop memory access.
@@ -121,6 +126,11 @@ Writeback
 - Write memory access value into $rd[26:22]
 
 ### sw_lab $rd, $rs, $rt
+OP: 11111
+R-type
+- $rd[26:22]: Actual register where data is located.
+- $rs[21:17]: Base address of loop memory access.
+- $rt[16:12]: Index of CAM.
 Decode
 - read the values from register file
 	- $rd[26:22]: Actual register where data is located.
@@ -167,7 +177,7 @@ LAB Interface
 - `incrementer_value` = $rd value
 - `initialize_WE` = init_lab = (xinst[31:27] == 11100)
 - `increase_address` = b_lab = (xinst[31:27] == 11101)
-- `reset` = dedode.b_lab and (!LOOP) = (d_inst[31:27] == 11101) && ($rt.(LOOP) is LOW) = do_not_b_lab
+- `reset` = decode.b_lab and (!LOOP) = (d_inst[31:27] == 11101) && ($rt.(LOOP) is LOW) | reset = do_not_b_lab | reset
 - `clock` = clock
 
 

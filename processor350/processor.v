@@ -104,7 +104,7 @@ module processor(clock, reset, dmem_data_in, dmem_address
 
     // *** FETCH STAGE *** //
 	 
-    wire[31:0] next_PC, f_PC, f_PC_plus4, f_inst, m_branch_dest_after_bex, 
+    wire[31:0] next_PC, next_PC_hold, f_PC, f_PC_plus4, f_inst, m_branch_dest_after_bex, 
         j_PC, j_PC_hold, f_T_extended;
 
     // PC_latch is the program counter
@@ -121,7 +121,7 @@ module processor(clock, reset, dmem_data_in, dmem_address
     assign f_j   = /* op == 00001 */ !f_inst[31] & !f_inst[30] & !f_inst[29] & !f_inst[28] &  f_inst[27];
     assign f_jal = /* op == 00011 */ !f_inst[31] & !f_inst[30] & !f_inst[29] &  f_inst[28] &  f_inst[27];
     assign x_jr  = /* op == 00100 */ !x_inst[31] & !x_inst[30] &  x_inst[29] & !x_inst[28] & !x_inst[27];
-	 assign f_jr  = /* op == 00100 */ !f_inst[31] & !f_inst[30] &  f_inst[29] & !f_inst[28] & !f_inst[27];
+	assign f_jr  = /* op == 00100 */ !f_inst[31] & !f_inst[30] &  f_inst[29] & !f_inst[28] & !f_inst[27];
     assign f_jump = (
         /* F_inst.op == j */    (f_j)   |
         /* F_inst.op == jal */  (f_jal) |
@@ -154,8 +154,22 @@ module processor(clock, reset, dmem_data_in, dmem_address
 		  m_op_bex & m_neq
         );
 
-	 assign m_branch_dest_after_bex = m_op_bex ? m_bex_32 : m_branch_dest;
-    assign next_PC = /*true to take branch val*/ take_branch ? m_branch_dest_after_bex : j_PC ;    
+	assign m_branch_dest_after_bex = m_op_bex ? m_bex_32 : m_branch_dest;
+    assign next_PC_hold = /*true to take branch val*/ take_branch ? m_branch_dest_after_bex : j_PC ;    
+    
+    // 552 calculate the next PC based on decode PC
+    // ALU: add 1 to m_PC
+    wire[31:0] d_PC_plus4, d_imm_xt, d_b_lab_branch_dest;
+    adder32_pro d_PC_add1(.data_a(d_PC), .data_b(32'd1), .sum(d_PC_plus4), .sub(1'b0));
+    // ALU: add sign extended m_inst_imm to m_PC_plus4
+    sign_extender_22_32 d_imm_extender(d_inst[21:0], d_imm_xt);
+    adder32_pro d_PC_plus1_add_imm(.data_a(d_PC_plus4), .data_b(d_imm_xt), .sum(d_b_lab_branch_dest), .sub(1'b0));
+
+    // take b_lab if the d_inst is b_lab and LOOP is high 
+    wire take_b_lab;
+    assign take_b_lab = d_op_b_lab & lab_loop;
+    assign next_PC = take_b_lab ? d_b_lab_branch_dest : next_PC_hold;
+
 
     // Instruction Memory
     imemm myimem(
@@ -170,11 +184,11 @@ module processor(clock, reset, dmem_data_in, dmem_address
     wire nop_notfinst;
     assign nop_notfinst = take_branch | data_haz_stall | jr_stall;
     assign d_inst_in = nop_notfinst ? 32'd0 : f_inst;
-	 assign d_PC_in   = nop_notfinst ? 32'd0 : f_PC;
+	assign d_PC_in   = nop_notfinst ? 32'd0 : f_PC;
 
     // F/D Latch
     wire fd_reset, fd_stall;
-    or fdr(fd_reset, reset, take_branch);   // reset signal = reset OR take_branch
+    or fdr(fd_reset, reset, take_branch, take_b_lab);   // reset signal = reset OR take_branch 552 add take_b_lab to reset
     assign fd_stall = mult_div_stall;       // stall signal = mult_div_stall (MUST INVERT INTO ENABLE)
     single_register_pro fd_PC_latch(.d(d_PC_in), .clk(clock), .clr(fd_reset), 
         .pr(1'b0), .write_enable(!fd_stall), .q(d_PC)); // f_PC latch into d_PC
@@ -210,11 +224,14 @@ module processor(clock, reset, dmem_data_in, dmem_address
 										 /*rd != 	  00000*/ 	!(!w_inst[26] & !w_inst[25] & !w_inst[24] & !w_inst[23] & !w_inst[22])) 	|
 										 /*jal        00011*/	(!w_inst[31] & !w_inst[30] & !w_inst[29] &  w_inst[28] &  w_inst[27]) ;                               
     
-	 assign m_inst_writesback = /*any alu op 00000*/   (( (!m_inst[31] & !m_inst[30] & !m_inst[29] & !m_inst[28] & !m_inst[27]) 	|
-                               /*addi       00101*/   	(!m_inst[31] & !m_inst[30] &  m_inst[29] & !m_inst[28] &  m_inst[27]) 	|
-                               /*lw         01000*/   	(!m_inst[31] &  m_inst[30] & !m_inst[29] & !m_inst[28] & !m_inst[27]) )	&
-										 /*rd != 	  00000*/ 	!(!m_inst[26] & !m_inst[25] & !m_inst[24] & !m_inst[23] & !m_inst[22])) 	|
-										 /*jal        00011*/	(!m_inst[31] & !m_inst[30] & !m_inst[29] &  m_inst[28] &  m_inst[27]) ;
+    // 552 add lw_lab instruction 
+    // w_inst will be re-written as a lw instruciton op_code to allow for reuse of hardware
+	assign m_inst_writesback = /*any alu op 00000*/  (((!m_inst[31] & !m_inst[30] & !m_inst[29] & !m_inst[28] & !m_inst[27]) 	|
+                                /*lw_lab     11110*/    ( m_inst[31] &  m_inst[30] &  m_inst[29] &  m_inst[28] & !m_inst[27])   |
+                               /*addi        00101*/    (!m_inst[31] & !m_inst[30] &  m_inst[29] & !m_inst[28] &  m_inst[27]) 	|
+                               /*lw          01000*/    (!m_inst[31] &  m_inst[30] & !m_inst[29] & !m_inst[28] & !m_inst[27]) )	&
+							   /*rd != 	     00000*/   !(!m_inst[26] & !m_inst[25] & !m_inst[24] & !m_inst[23] & !m_inst[22])) 	|
+							   /*jal         00011*/    (!m_inst[31] & !m_inst[30] & !m_inst[29] &  m_inst[28] &  m_inst[27]) ;
 										 
 	 // w_rd = w_inst.rd OR ($31) if W.inst == jal (OP = 00011)
     assign w_rd  = (!w_inst[31] & !w_inst[30] & !w_inst[29] &  w_inst[28] &  w_inst[27]) ? 5'd31 : w_inst[26:22];
@@ -272,7 +289,20 @@ module processor(clock, reset, dmem_data_in, dmem_address
 	 
     single_register_pro dx_PC_latch(.d(d_PC), .clk(clock), .clr(dx_reset), 
         .pr(1'b0), .write_enable(!dx_stall), .q(x_PC));     // latch PC 
-    single_register_pro dx_inst_latch(.d(d_inst_latch_final), .clk(clock), .clr(dx_reset), 
+
+    // 552 make the next instruction for b_lab == addi $rd, $r0, lab_address_out
+    wire[31:0] d_inst_latch_final_lab;
+    // opcode
+    assign d_inst_latch_final_lab[31:27] = d_op_b_lab ? 5'b11101 : d_inst[31:27];
+    // rd always stays the same
+    assign d_inst_latch_final_lab[26:22] = d_inst[31:27];
+    // r0 (so that we add this value in)
+    assign d_inst_latch_final_lab[21:17] = d_op_b_lab ? 5'b00000 : d_inst[21:17];
+    // our current lab_value (pre-shift)
+    assign d_inst_latch_final_lab[16:0]  = d_op_b_lab ? lab_address_out[16:0] : d_inst[16:0];
+
+
+    single_register_pro dx_inst_latch(.d(d_inst_latch_final_lab), .clk(clock), .clr(dx_reset), 
         .pr(1'b0), .write_enable(!dx_stall), .q(x_inst));   // latch inst
     single_register_pro dx_rs1_latch(.d(d_rs1_data), .clk(clock), .clr(dx_reset), 
         .pr(1'b0), .write_enable(!dx_stall), .q(x_RS1));     // latch d_rs1_data
@@ -292,8 +322,27 @@ module processor(clock, reset, dmem_data_in, dmem_address
 		  
 		  
 		  
-		  
-		  
+    // 552 LAB Declaration //
+    wire[31:0] lab_address_out;
+    wire lab_loop;
+
+    wire d_op_b_lab;
+    assign d_op_b_lab = /*b_lab 11101*/   ( d_inst[31] &  d_inst[30] &  d_inst[29] & !d_inst[28] &  d_inst[27]);
+
+    // lab will reside between D/X stages (latched posedge)
+    lab main_lab(
+        .register_index(),
+        .threshold_value(d_rs1_data),
+        .incrementer_value(d_rs2_data),
+        .initialize_WE(d_op_init_lab),
+        .increase_address(d_op_b_lab & lab_loop),
+        .clock(clock),
+        .reset(reset | (d_op_b_lab & !lab_loop)),
+        .address_out(lab_address_out),
+        .loop(lab_loop)
+    ); 
+
+	  
 
 
 
@@ -310,7 +359,7 @@ module processor(clock, reset, dmem_data_in, dmem_address
     wire[31:0] x_RS1, x_RS2, x_inst, x_PC, x_imm_xt, x_bex_32;
 
     // MUX between writeback values into operands
-    wire[31:0] data_op_A, data_op_A_hold, data_op_B, data_op_B_hold, data_op_B_final, w_ex_or_jal_s1;
+    wire[31:0] data_op_A, data_op_A_hold, data_op_B, data_op_B_hold, data_op_B_final, w_ex_or_jal_s1, data_op_B_final_final;
     wire x_s1_m_equal, x_s1_w_equal, x_op_bex, x_op_setx;
 
     compare5 cxms1(x_inst[21:17], m_inst[26:22], x_s1_m_equal);
@@ -398,7 +447,15 @@ module processor(clock, reset, dmem_data_in, dmem_address
         (/* lw   op == 01000 */ !x_inst[31] &  x_inst[30] & !x_inst[29] & !x_inst[28] & !x_inst[27]) 
         );
     assign data_op_B_final = (x_i_type) ? x_imm_xt : data_op_B;
-	 assign data_op_B_final_after_setx = x_op_setx ? x_bex_32 : data_op_B_final;
+	assign data_op_B_final_after_setx = x_op_setx ? x_bex_32 : data_op_B_final;
+    // 552 the final second operand is the lab_address_out if
+        // x_op_lw_sw_lab: x_inst is lw_lab or sw_lab
+        // AND if lab_loop is high
+    assign data_op_B_final_final = (x_op_lw_sw_lab & lab_loop) ? lab_address_out : data_op_B_final_after_setx;
+
+    wire x_op_lw_sw_lab;
+    assign x_op_lw_sw_lab = /*lw_lab 11110*/ ( x_inst[31] &  x_inst[30] &  x_inst[29] &  x_inst[28] & !x_inst[27]) | 
+                            /*sw_lab 11111*/ ( x_inst[31] &  x_inst[30] &  x_inst[29] &  x_inst[28] &  x_inst[27]) ;
 
     wire[31:0] x_alu_out, x_multdiv_out;
     wire x_LT, x_ovf, x_n_eq, x_data_exception;
@@ -431,12 +488,13 @@ module processor(clock, reset, dmem_data_in, dmem_address
 		  
 	wire[4:0] ALU_op_code, ALU_op_code_hold;
 	assign x_branch = x_op_bne | x_op_blt;
-	assign ALU_op_code_hold = x_i_type ? 5'b00000 : x_inst[6:2];
+    // 552 need ADD for Opcode if we have lw_lab or sw_lab (x_op_lw_sw_lab & lab_loop)
+	assign ALU_op_code_hold = (x_i_type | (x_op_lw_sw_lab & lab_loop)) ? 5'b00000 : x_inst[6:2];
 	assign ALU_op_code = x_branch ? 5'b00001 : ALU_op_code_hold;
 	
     alu alu_friend(
         .data_operandA(data_op_A), 
-        .data_operandB(data_op_B_final_after_setx), 
+        .data_operandB(data_op_B_final_final), 
         .ctrl_ALUopcode(ALU_op_code), 
         .ctrl_shiftamt(x_inst[11:7]), 
         .data_result(x_alu_out), 
@@ -448,7 +506,7 @@ module processor(clock, reset, dmem_data_in, dmem_address
 
     multdiv mult_div_unit(
         .data_operandA(data_op_A), 
-        .data_operandB(data_op_B_final_after_setx), 
+        .data_operandB(data_op_B_final_final), 
         .ctrl_MULT(ctrl_MULT), 
         .ctrl_DIV(ctrl_DIV), 
         .clock(clock), 
@@ -456,6 +514,11 @@ module processor(clock, reset, dmem_data_in, dmem_address
         .data_exception(x_data_exception), 
         .data_resultRDY(data_resultRDY)
         );
+
+
+
+
+
 
     // choose between mult_div and ALU output
     wire[31:0] x_data_final, x_data_mul_div, x_inst_or_nop;
@@ -465,30 +528,28 @@ module processor(clock, reset, dmem_data_in, dmem_address
     assign x_data_final = (x_mult_or_div) ? x_multdiv_out : x_alu_out;
 
 	 
-	 // EXCEPTION HANDLING
-	 wire[2:0] x_exc_ID, a_or_s_exc, m_or_d_exc, m_or_a_exc;
-	 wire x_exc, x_add, x_sub, x_addi; // use x_divd and x_mult
-	 assign x_addi = /* addi op == 00101 */ !x_inst[31] & !x_inst[30] &  x_inst[29] & !x_inst[28] &  x_inst[27];
-	 assign x_add  = /* ALU  OP == 00000 */ !x_inst[6]  & !x_inst[5]  & !x_inst[4]  & !x_inst[3]  & !x_inst[2];
-	 assign x_sub  = /* ALU  OP == 00001 */ !x_inst[6]  & !x_inst[5]  & !x_inst[4]  & !x_inst[3]  &  x_inst[2];
+	// EXCEPTION HANDLING
+	wire[2:0] x_exc_ID, a_or_s_exc, m_or_d_exc, m_or_a_exc;
+	wire x_exc, x_add, x_sub, x_addi; // use x_divd and x_mult
+	assign x_addi = /* addi op == 00101 */ !x_inst[31] & !x_inst[30] &  x_inst[29] & !x_inst[28] &  x_inst[27];
+	assign x_add  = /* ALU  OP == 00000 */ !x_inst[6]  & !x_inst[5]  & !x_inst[4]  & !x_inst[3]  & !x_inst[2];
+	assign x_sub  = /* ALU  OP == 00001 */ !x_inst[6]  & !x_inst[5]  & !x_inst[4]  & !x_inst[3]  &  x_inst[2];
 	 
-	 assign a_or_s_exc = x_sub ? 3'd3 : 3'd1;									// add or sub
-	 assign m_or_d_exc = x_mult ? 3'd4 : 3'd5;								// mul or div
-	 assign m_or_a_exc = (x_divd|x_mult) ? m_or_d_exc : a_or_s_exc;	// muldiv or alu
-	 assign x_exc_ID   = x_addi ? 3'd2 : m_or_a_exc;						// final
+	assign a_or_s_exc = x_sub ? 3'd3 : 3'd1;									// add or sub
+	assign m_or_d_exc = x_mult ? 3'd4 : 3'd5;								// mul or div
+	assign m_or_a_exc = (x_divd|x_mult) ? m_or_d_exc : a_or_s_exc;	// muldiv or alu
+	assign x_exc_ID   = x_addi ? 3'd2 : m_or_a_exc;						// final
 	 
-	 // any exception at all triggers x_exc (but must also be an inst that has exception capability)
-	 assign x_exc = ((x_data_exception) & (x_divd|x_mult)) | ((x_ovf) & (x_add|x_sub|x_addi));
+	// any exception at all triggers x_exc (but must also be an inst that has exception capability)
+	assign x_exc = ((x_data_exception) & (x_divd|x_mult)) | ((x_ovf) & (x_add|x_sub|x_addi));
 
-	
-	
-	 
-	 
+
+
     // X/M Latch
     // enable = 1'b1. reset = reset
     assign x_inst_or_nop = mult_div_stall ? 32'd0 : x_inst;
-	 wire xm_stall;
-	 assign xm_stall = mult_div_stall;
+	wire xm_stall;
+	assign xm_stall = mult_div_stall;
 	 
     single_register_pro xm_inst_latch(.d(x_inst_or_nop), .clk(clock), .clr(reset), 
         .pr(1'b0), .write_enable(!xm_stall), .q(m_inst));     // latch x_inst_or_nop into m_inst
@@ -502,19 +563,35 @@ module processor(clock, reset, dmem_data_in, dmem_address
     dffe x_neq_dffe(.d(x_n_eq), .clk(clock), .clrn(!reset), .ena(!xm_stall), .q(m_neq)); // latch x_n_eq through to m_neq
     dffe x_lt_dffe(.d(x_LT), .clk(clock), .clrn(!reset), .ena(!xm_stall), .q(m_lt)); // latch x_LT through to m_lt
 		
-		// latch the exceptions through
-		dffe x_exc_latch(.d(x_exc), .clk(clock), .clrn(!reset), .ena(!xm_stall), .q(m_exc)); // latch x_exc through to m_exc
-		// latch m_exc_ID through to m_exc_ID
-		dffe x_excID0_latch(.d(x_exc_ID[0]), .clk(clock), .clrn(!reset), .ena(!xm_stall), .q(m_exc_ID[0])); 
-		dffe x_excID1_latch(.d(x_exc_ID[1]), .clk(clock), .clrn(!reset), .ena(!xm_stall), .q(m_exc_ID[1])); 
-		dffe x_excID2_latch(.d(x_exc_ID[2]), .clk(clock), .clrn(!reset), .ena(!xm_stall), .q(m_exc_ID[2])); 
+	// latch the exceptions through
+	dffe x_exc_latch(.d(x_exc), .clk(clock), .clrn(!reset), .ena(!xm_stall), .q(m_exc)); // latch x_exc through to m_exc
+	// latch m_exc_ID through to m_exc_ID
+	dffe x_excID0_latch(.d(x_exc_ID[0]), .clk(clock), .clrn(!reset), .ena(!xm_stall), .q(m_exc_ID[0])); 
+	dffe x_excID1_latch(.d(x_exc_ID[1]), .clk(clock), .clrn(!reset), .ena(!xm_stall), .q(m_exc_ID[1])); 
+	dffe x_excID2_latch(.d(x_exc_ID[2]), .clk(clock), .clrn(!reset), .ena(!xm_stall), .q(m_exc_ID[2])); 
 
 
-	   dffe xm_bex_latch(.d(x_op_bex), .clk(clock), .clrn(!reset), .ena(!xm_stall), .q(m_op_bex));
+	dffe xm_bex_latch(.d(x_op_bex), .clk(clock), .clrn(!reset), .ena(!xm_stall), .q(m_op_bex));
 	 
-		// latch BEX value to M stage
-		single_register_pro xm_bex_T_latch(.d(x_bex_32), .clk(clock), .clr(reset), 
+	// latch BEX value to M stage
+	single_register_pro xm_bex_T_latch(.d(x_bex_32), .clk(clock), .clr(reset), 
         .pr(1'b0), .write_enable(!xm_stall), .q(m_bex_32)); // latch d_rs2_data
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -523,23 +600,28 @@ module processor(clock, reset, dmem_data_in, dmem_address
 
     // *** MEMORY STAGE *** //
 	 
-	 ///* REMOVE */ output[31:0] m_RD, m_inst, m_PC, m_PC_plus4, m_data, m_data_in, m_data_final, m_imm_xt, m_branch_dest, mem_out, w_inst, w_PC, w_data;
-	 ///* REMOVE */ output m_ovf, m_neq, m_lt, write_rd_back_mw, m_inst_sw, m_inst_lw;
+	///* REMOVE */ output[31:0] m_RD, m_inst, m_PC, m_PC_plus4, m_data, m_data_in, m_data_final, m_imm_xt, m_branch_dest, mem_out, w_inst, w_PC, w_data;
+	///* REMOVE */ output m_ovf, m_neq, m_lt, write_rd_back_mw, m_inst_sw, m_inst_lw;
 	 
 
     wire[31:0] m_bex_32, m_exception_ID, m_RD, m_inst, m_PC, m_PC_plus4, m_data, m_data_in, m_data_final, m_imm_xt, m_branch_dest, mem_out;
     wire m_ovf, m_neq, m_lt, m_exc, m_op_bex;
 
-	 wire[2:0] m_exc_ID;
+	wire[2:0] m_exc_ID;
 	 
-	 sign_extender_3_32 s_ext_m_exception_ID(m_exc_ID, m_exception_ID);
+	sign_extender_3_32 s_ext_m_exception_ID(m_exc_ID, m_exception_ID);
 
     wire write_rd_back_mw, m_inst_sw, m_inst_lw, write_rd_back_mw_not_r0;
     compare5 wm_rd(w_inst[26:22], m_inst[26:22], write_rd_back_mw);
 	 assign write_rd_back_mw_not_r0 = (write_rd_back_mw) & !(!w_inst[26] & !w_inst[25] & !w_inst[24] & !w_inst[23] & !w_inst[22]);
-	 
-    assign m_inst_sw = /* op == 00111 */ !m_inst[31] & !m_inst[30] &  m_inst[29] &  m_inst[28] &  m_inst[27];
-    assign m_inst_lw = /* op == 01000 */ !m_inst[31] &  m_inst[30] & !m_inst[29] & !m_inst[28] & !m_inst[27];
+	
+    // 552 also make the lw_lab and sw_lab insns count for these signals 
+    assign m_inst_sw = /* sw     == 00111 */ (!m_inst[31] & !m_inst[30] &  m_inst[29] &  m_inst[28] &  m_inst[27]) | 
+                       /* sw_lab == 11111 */ ( m_inst[31] &  m_inst[30] &  m_inst[29] &  m_inst[28] &  m_inst[27]);
+
+    assign m_inst_lw = /* lw     == 01000 */ (!m_inst[31] &  m_inst[30] & !m_inst[29] & !m_inst[28] & !m_inst[27]) |
+                       /* lw_lab == 11110 */ ( m_inst[31] &  m_inst[30] &  m_inst[29] &  m_inst[28] & !m_inst[27]);;
+
 
     // choose between writeback and m_RD
     assign m_data_in = write_rd_back_mw_not_r0 ? w_data : m_RD;
@@ -561,17 +643,25 @@ module processor(clock, reset, dmem_data_in, dmem_address
     // M/W Latch
     single_register_pro mw_data_latch(.d(m_data_final), .clk(clock), .clr(reset), 
         .pr(1'b0), .write_enable(!mw_stall), .q(w_data));     // latch m_data_final into w_data
-    single_register_pro mw_inst_latch(.d(m_inst), .clk(clock), .clr(reset), 
+    
+
+    // 552 latch lw into the top bits of incoming w_inst if the current instruction is lw_lab
+    // this allows us to re-use the hardware handling WB and bypassing for lw
+    wire[31:0] m_inst_final; 
+    assign m_inst_final[31:27] = m_inst_lw ? 5'b01000 : m_inst[31:27];
+    assign m_inst_final[26:0] = m_inst[26:0];
+
+    single_register_pro mw_inst_latch(.d(m_inst_final), .clk(clock), .clr(reset), 
         .pr(1'b0), .write_enable(!mw_stall), .q(w_inst));     // latch m_inst into w_inst
     single_register_pro mw_PC_latch(.d(m_PC), .clk(clock), .clr(reset), 
         .pr(1'b0), .write_enable(!mw_stall), .q(w_PC));     // latch m_PC into w_PC
 
-		// latch the exceptions through
-		dffe m_exc_latch(.d(m_exc), .clk(clock), .clrn(!reset), .ena(!mw_stall), .q(w_exc)); // latch x_exc through to m_exc
-		// latch m_exc_ID through to m_exc_ID
-		dffe m_excID0_latch(.d(m_exc_ID[0]), .clk(clock), .clrn(!reset), .ena(!mw_stall), .q(w_exc_ID[0])); 
-		dffe m_excID1_latch(.d(m_exc_ID[1]), .clk(clock), .clrn(!reset), .ena(!mw_stall), .q(w_exc_ID[1])); 
-		dffe m_excID2_latch(.d(m_exc_ID[2]), .clk(clock), .clrn(!reset), .ena(!mw_stall), .q(w_exc_ID[2])); 
+	// latch the exceptions through
+	dffe m_exc_latch(.d(m_exc), .clk(clock), .clrn(!reset), .ena(!mw_stall), .q(w_exc)); // latch x_exc through to m_exc
+	// latch m_exc_ID through to m_exc_ID
+	dffe m_excID0_latch(.d(m_exc_ID[0]), .clk(clock), .clrn(!reset), .ena(!mw_stall), .q(w_exc_ID[0])); 
+	dffe m_excID1_latch(.d(m_exc_ID[1]), .clk(clock), .clrn(!reset), .ena(!mw_stall), .q(w_exc_ID[1])); 
+	dffe m_excID2_latch(.d(m_exc_ID[2]), .clk(clock), .clrn(!reset), .ena(!mw_stall), .q(w_exc_ID[2])); 
 
 
 
@@ -579,10 +669,10 @@ module processor(clock, reset, dmem_data_in, dmem_address
 
     // *** WRITEBACK STAGE *** //
     wire[31:0] w_inst, w_PC, w_data, w_exception_ID;
-	 wire w_exc;
-	 wire[2:0] w_exc_ID;
+	wire w_exc;
+	wire[2:0] w_exc_ID;
 	 
-	 sign_extender_3_32 s_ext_exception_ID(w_exc_ID, w_exception_ID);
+	sign_extender_3_32 s_ext_exception_ID(w_exc_ID, w_exception_ID);
 
 
 endmodule
@@ -684,6 +774,23 @@ module sign_extender(in17, out32);
             assign out32[i] = in17[16]; // assign highest bit to rest of 32 bit output
         end
 	endgenerate
+endmodule
+
+
+/*
+22 to 32 signed extender
+*/
+module sign_extender_22_32(in22, out32);
+    input[21:0] in22;
+    output[31:0] out32;
+
+    assign out32[21:0] = in22;
+    genvar i;
+    generate
+        for (i = 21; i < 32; i = i + 1) begin: loop1
+            assign out32[i] = in22[21]; // assign highest bit to rest of 32 bit output
+        end
+    endgenerate
 endmodule
 
 
