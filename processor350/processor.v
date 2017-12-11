@@ -34,7 +34,7 @@
  * 
  * 
  */
-module processor(clock, reset, dmem_data_in, dmem_address
+module processor(clock, reset, dmem_data_in, dmem_address, cycle_counter
 	  );
 	 
 
@@ -48,10 +48,19 @@ module processor(clock, reset, dmem_data_in, dmem_address
     output [31:0] dmem_data_in;//, x_PC, x_alu_out, x_RS1, x_RS2; //, data_op_B_final_after_setx, data_op_A;
     output [11:0] dmem_address;
 
-    // Figure out how to generate a Quartus syncram component and commit the
-    // generated verilog file. Make sure you configure it correctly!
+    // count the number of cycles a program takes
+    output [31:0] cycle_counter;
+    reg[31:0] cycle_reg;
 
-    
+    always@(posedge clock)
+    begin
+        if(reset)
+            cycle_reg <= 0;
+        else 
+            cycle_reg <= cycle_reg + 1;
+    end
+    assign cycle_counter = cycle_reg;
+
 
     /* YOUR CODE STARTS HERE */
 
