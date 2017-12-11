@@ -42,7 +42,7 @@ assign address_out = offset_reg;
 // calculate loop value
 // if the offset_reg is less than threshold_reg, then output HIGH
 // if the offset_reg is more or equal to threshold_reg, then output LOW
-always@(*)
+always@(posedge clock)
 begin
 	if(reset)
 		loop_reg <= 0;
@@ -50,7 +50,7 @@ begin
 		loop_reg <= 1;
 	else 
 	begin
-		if(offset_reg < threshold_value)
+		if(offset_reg < threshold_reg)
 			loop_reg <= 1;
 		else
 			loop_reg <= 0;
