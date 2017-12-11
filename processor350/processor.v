@@ -35,9 +35,22 @@
  * 
  */
 module processor(clock, reset, dmem_data_in, dmem_address, cycle_counter
+	  , x_PC, x_alu_out, x_RS1, x_RS2, data_op_B_final_final, data_op_A, f_inst, d_inst, x_inst, m_inst
+	  , d_rs1_data, d_rs2_data, lab_address_out
+	  , lab_loop, d_op_b_lab, d_op_init_lab
+	  , take_b_lab
 	  );
 	 
 
+	 
+	 
+	 
+	 output[31:0] d_rs1_data, d_rs2_data, lab_address_out;
+	 output lab_loop, d_op_b_lab, d_op_init_lab, take_b_lab;
+	
+	 
+	 
+	 
 	 
     input clock, reset;
 
@@ -45,7 +58,7 @@ module processor(clock, reset, dmem_data_in, dmem_address, cycle_counter
     //output [4:0]  ALU_op_code;
     //output x_n_eq, x_LT, x_ovf;
 	 
-    output [31:0] dmem_data_in;//, x_PC, x_alu_out, x_RS1, x_RS2; //, data_op_B_final_after_setx, data_op_A;
+    output [31:0] dmem_data_in, x_PC, x_alu_out, x_RS1, x_RS2, data_op_B_final_final, data_op_A, f_inst, d_inst, x_inst, m_inst;
     output [11:0] dmem_address;
 
     // count the number of cycles a program takes
@@ -193,11 +206,11 @@ module processor(clock, reset, dmem_data_in, dmem_address, cycle_counter
     wire nop_notfinst;
     assign nop_notfinst = take_branch | data_haz_stall | jr_stall;
     assign d_inst_in = nop_notfinst ? 32'd0 : f_inst;
-	assign d_PC_in   = nop_notfinst ? 32'd0 : f_PC;
+	 assign d_PC_in   = nop_notfinst ? 32'd0 : f_PC;
 
     // F/D Latch
     wire fd_reset, fd_stall;
-    or fdr(fd_reset, reset, take_branch, take_b_lab);   // reset signal = reset OR take_branch 552 add take_b_lab to reset
+    or fdr(fd_reset, reset, take_branch);   // reset signal = reset OR take_branch 552 add take_b_lab to reset
     assign fd_stall = mult_div_stall;       // stall signal = mult_div_stall (MUST INVERT INTO ENABLE)
     single_register_pro fd_PC_latch(.d(d_PC_in), .clk(clock), .clr(fd_reset), 
         .pr(1'b0), .write_enable(!fd_stall), .q(d_PC)); // f_PC latch into d_PC
@@ -247,6 +260,8 @@ module processor(clock, reset, dmem_data_in, dmem_address, cycle_counter
     assign w_rd_after_exception = w_exc ? 5'd30 : w_rd;
 	 
     // 552 d_op_init_lab
+	 wire x_op_init_lab;
+	 assign x_op_init_lab = /*init_lab 11100*/   ( x_inst[31] &  x_inst[30] &  x_inst[29] & !x_inst[28] & !x_inst[27]);
     assign d_op_init_lab = /*init_lab 11100*/   ( d_inst[31] &  d_inst[30] &  d_inst[29] & !d_inst[28] & !d_inst[27]);
 	
 
@@ -258,9 +273,9 @@ module processor(clock, reset, dmem_data_in, dmem_address, cycle_counter
     // d_rs2 is MUX between rt (0) and rd (1)
     wire d_br_or_sw;
     assign d_br_or_sw = /*branch    00-10*/   (!d_inst[31] & !d_inst[30]               &  d_inst[28] & !d_inst[27]) |
-						/*jr        00100*/   (!d_inst[31] & !d_inst[30] &  d_inst[29] & !d_inst[28] & !d_inst[27]) |
+								/*jr        00100*/   (!d_inst[31] & !d_inst[30] &  d_inst[29] & !d_inst[28] & !d_inst[27]) |
                         /*sw        00111*/   (!d_inst[31] & !d_inst[30] &  d_inst[29] &  d_inst[28] &  d_inst[27]) | 
-                        /*552       b_lab*/   (d_op_init_lab);                               
+                        /*552    init_lab*/   (d_op_init_lab);                               
     assign d_rs2_hold = d_br_or_sw ? d_inst[26:22] : d_inst[16:12];
 	// d_rs2 is $r0 if we call bex
 	assign d_rs2 = d_op_bex ? 5'd0 : d_rs2_hold;
@@ -304,7 +319,7 @@ module processor(clock, reset, dmem_data_in, dmem_address, cycle_counter
     // opcode
     assign d_inst_latch_final_lab[31:27] = d_op_b_lab ? 5'b11101 : d_inst[31:27];
     // rd always stays the same
-    assign d_inst_latch_final_lab[26:22] = d_inst[31:27];
+    assign d_inst_latch_final_lab[26:22] = d_inst[26:22];
     // r0 (so that we add this value in)
     assign d_inst_latch_final_lab[21:17] = d_op_b_lab ? 5'b00000 : d_inst[21:17];
     // our current lab_value (pre-shift)
@@ -629,7 +644,7 @@ module processor(clock, reset, dmem_data_in, dmem_address, cycle_counter
                        /* sw_lab == 11111 */ ( m_inst[31] &  m_inst[30] &  m_inst[29] &  m_inst[28] &  m_inst[27]);
 
     assign m_inst_lw = /* lw     == 01000 */ (!m_inst[31] &  m_inst[30] & !m_inst[29] & !m_inst[28] & !m_inst[27]) |
-                       /* lw_lab == 11110 */ ( m_inst[31] &  m_inst[30] &  m_inst[29] &  m_inst[28] & !m_inst[27]);;
+                       /* lw_lab == 11110 */ ( m_inst[31] &  m_inst[30] &  m_inst[29] &  m_inst[28] & !m_inst[27]);
 
 
     // choose between writeback and m_RD
